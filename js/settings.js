@@ -80,27 +80,41 @@ const settings = {
      * Sheets converts "08:00" to a Date (e.g. "1899-12-30T01:00:00.000Z").
      * This extracts HH:mm from whatever format we get.
      */
-    normalizeTime(val) {
-        if (!val) return '09:00';
-        const str = String(val);
-        // Already HH:mm format
-        if (/^\d{2}:\d{2}$/.test(str)) return str;
-        // ISO date string from Sheets - extract time portion based on timezone offset
-        if (str.includes('T') || str.includes('1899')) {
-            try {
-                const d = new Date(str);
-                // Google Sheets stores time as a date in 1899 with UTC offset
-                // We need to get the time in the original timezone (Asia/Jakarta UTC+7)
-                const hours = String(d.getUTCHours() + 7).padStart(2, '0');
-                const mins = String(d.getUTCMinutes()).padStart(2, '0');
-                const h = parseInt(hours) % 24;
-                return String(h).padStart(2, '0') + ':' + mins;
-            } catch (e) {
-                return '09:00';
-            }
+  normalizeTime(val) {
+    if (!val) return '09:00';
+    
+    let str = String(val).trim();
+
+    // 1. Perbaikan untuk format H:mm (misal: "8:30" menjadi "08:30")
+    // Regex ini mencari string yang jamnya cuma 1 digit
+    if (/^\d:\d{2}$/.test(str)) {
+        str = '0' + str;
+    }
+
+    // 2. Jika sudah benar HH:mm (2 digit jam : 2 digit menit), langsung kembalikan
+    if (/^\d{2}:\d{2}$/.test(str)) return str;
+
+    // 3. Logika untuk Date object / ISO string dari Google Sheets
+    if (str.includes('T') || str.includes('1899')) {
+        try {
+            const d = new Date(str);
+            // Ambil UTC Hours + 7 untuk WIB
+            let h = d.getUTCHours() + 7;
+            h = h % 24; // Pastikan jika lewat jam 24 kembali ke 0
+            const m = d.getUTCMinutes();
+            
+            // Selalu gunakan padStart agar hasilnya pasti 2 digit (08:30)
+            return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        } catch (e) {
+            console.error("Error parsing date:", e);
+            return '09:00';
         }
-        return str;
-    },
+    }
+
+    // 4. Fallback: Jika format aneh, coba paksa isi angka 0 di depan sampai panjangnya 5 (HH:mm)
+    // Ini akan mengubah "8:30" menjadi "08:30" jika lolos dari pengecekan di atas
+    return str.padStart(5, '0');
+},
 
     initForms() {
         // Company form
