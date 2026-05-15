@@ -16,8 +16,7 @@ const api = {
     async request(action, data = {}) {
         // Jika API_BASE_URL kosong, gunakan localStorage fallback
         if (!API_BASE_URL) {
-            return this._localFallback(action, data);
-        }
+             }
 
         try {
             const response = await fetch(API_BASE_URL, {
