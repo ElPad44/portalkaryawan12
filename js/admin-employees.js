@@ -7,6 +7,7 @@ const adminEmployees = {
     employees: [],
     currentPage: 1,
     perPage: 10,
+    editingEmployeeId: null, // Menyimpan ID karyawan yang sedang diedit
     filters: {
         search: '',
         department: '',
@@ -80,7 +81,7 @@ const adminEmployees = {
             addBtn.addEventListener('click', () => this.showAddModal());
         }
 
-        // Close modal
+        // Close add modal
         const closeBtn = document.getElementById('btn-close-modal');
         const cancelBtn = document.getElementById('btn-cancel-add');
         const modal = document.getElementById('modal-add-employee');
@@ -88,20 +89,40 @@ const adminEmployees = {
         if (closeBtn) closeBtn.addEventListener('click', () => this.hideAddModal());
         if (cancelBtn) cancelBtn.addEventListener('click', () => this.hideAddModal());
 
-        // Close modal when clicking overlay
         if (modal) {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) this.hideAddModal();
             });
         }
 
-        // Form submit
+        // Form submit - Add Employee
         const form = document.getElementById('form-add-employee');
         if (form) {
             form.addEventListener('submit', (e) => this.handleAddEmployee(e));
         }
 
-        // Set default date
+        // ==========================================
+        // EVENT BINDING UNTUK EDIT MODAL (TAMBAHAN)
+        // ==========================================
+        const closeEditBtn = document.getElementById('btn-close-edit-modal');
+        const cancelEditBtn = document.getElementById('btn-cancel-edit');
+        const editModal = document.getElementById('modal-edit-employee');
+        const editForm = document.getElementById('form-edit-employee');
+
+        if (closeEditBtn) closeEditBtn.addEventListener('click', () => this.hideEditModal());
+        if (cancelEditBtn) cancelEditBtn.addEventListener('click', () => this.hideEditModal());
+
+        if (editModal) {
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) this.hideEditModal();
+            });
+        }
+
+        if (editForm) {
+            editForm.addEventListener('submit', (e) => this.handleEditEmployee(e));
+        }
+
+        // Set default date for add form
         const joinDateInput = document.getElementById('emp-join-date');
         if (joinDateInput) {
             joinDateInput.valueAsDate = new Date();
@@ -307,10 +328,28 @@ const adminEmployees = {
         }
         if (form) {
             form.reset();
-            // Reset date to today
             const joinDateInput = document.getElementById('emp-join-date');
             if (joinDateInput) joinDateInput.valueAsDate = new Date();
         }
+    },
+
+    showEditModal() {
+        const modal = document.getElementById('modal-edit-employee');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    },
+
+    hideEditModal() {
+        const modal = document.getElementById('modal-edit-employee');
+        const form = document.getElementById('form-edit-employee');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        if (form) form.reset();
+        this.editingEmployeeId = null;
     },
 
     async handleAddEmployee(e) {
@@ -325,13 +364,7 @@ const adminEmployees = {
         const joinDate = document.getElementById('emp-join-date').value;
 
         const employeeData = {
-            name,
-            email,
-            department,
-            position,
-            shift,
-            status,
-            joinDate,
+            name, email, department, position, shift, status, joinDate,
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${this.getRandomColor()}&color=fff`
         };
 
@@ -339,15 +372,11 @@ const adminEmployees = {
             const result = await api.addEmployee(employeeData);
             if (result.success) {
                 this.employees.unshift(result.data);
-
-                // Update dept filter options if new department
                 this.updateDeptFilterOptions(department);
-
                 this.hideAddModal();
                 this.renderTable();
                 this.renderMobileCards();
                 this.updatePaginationInfo();
-
                 toast.success(`Karyawan ${name} berhasil ditambahkan!`);
             } else {
                 toast.error(result.error || 'Gagal menambahkan karyawan');
@@ -358,8 +387,73 @@ const adminEmployees = {
         }
     },
 
+    // ==========================================
+    // DI SINI ADALAH LOGIKA AKTIF FITUR EDIT DATA
+    // ==========================================
+    editEmployee(id) {
+        const emp = this.employees.find(e => e.id === id);
+        if (!emp) {
+            toast.error('Data karyawan tidak ditemukan!');
+            return;
+        }
+
+        this.editingEmployeeId = id;
+
+        // Auto-populate / Isi form modal secara otomatis dengan data lama
+        document.getElementById('edit-emp-name').value = emp.name || '';
+        document.getElementById('edit-emp-email').value = emp.email || '';
+        document.getElementById('edit-emp-department').value = emp.department || '';
+        document.getElementById('edit-emp-position').value = emp.position || '';
+        document.getElementById('edit-emp-shift').value = emp.shift || 'Pagi';
+        document.getElementById('edit-emp-status').value = emp.status || 'active';
+        document.getElementById('edit-emp-join-date').value = emp.joinDate || '';
+
+        this.showEditModal();
+    },
+
+    async handleEditEmployee(e) {
+        e.preventDefault();
+        if (!this.editingEmployeeId) return;
+
+        const name = document.getElementById('edit-emp-name').value;
+        const email = document.getElementById('edit-emp-email').value;
+        const department = document.getElementById('edit-emp-department').value;
+        const position = document.getElementById('edit-emp-position').value;
+        const shift = document.getElementById('edit-emp-shift').value;
+        const status = document.getElementById('edit-emp-status').value;
+        const joinDate = document.getElementById('edit-emp-join-date').value;
+
+        const updatedData = {
+            name, email, department, position, shift, status, joinDate
+        };
+
+        try {
+            // Panggil API update ke Google Apps Script backend
+            const result = await api.updateEmployee(this.editingEmployeeId, updatedData);
+            
+            if (result.success) {
+                // Perbarui memori array lokal data aplikasi
+                const index = this.employees.findIndex(e => e.id === this.editingEmployeeId);
+                if (index !== -1) {
+                    this.employees[index] = { ...this.employees[index], ...updatedData };
+                }
+
+                this.updateDeptFilterOptions(department);
+                this.hideEditModal();
+                this.renderTable();
+                this.renderMobileCards();
+                
+                toast.success(`Data ${name} berhasil diperbarui di Spreadsheet!`);
+            } else {
+                toast.error(result.error || 'Gagal memperbarui data karyawan');
+            }
+        } catch (error) {
+            console.error('Error updating employee:', error);
+            toast.error('Terjadi kesalahan koneksi server');
+        }
+    },
+
     updateDeptFilterOptions(newDept) {
-        // Update filter dropdown
         const deptFilter = document.getElementById('dept-filter');
         if (deptFilter) {
             const existingOptions = Array.from(deptFilter.options).map(opt => opt.value);
@@ -371,7 +465,6 @@ const adminEmployees = {
             }
         }
 
-        // Update datalist in modal
         const deptList = document.getElementById('dept-list');
         if (deptList) {
             const existingOptions = Array.from(deptList.options).map(opt => opt.value);
@@ -393,10 +486,6 @@ const adminEmployees = {
         if (emp) {
             alert(`Detail Karyawan:\n\nNama: ${emp.name}\nEmail: ${emp.email}\nDepartemen: ${emp.department}\nJabatan: ${emp.position}\nShift: ${emp.shift}\nStatus: ${this.getStatusLabel(emp.status)}\nBergabung: ${emp.joinDate}`);
         }
-    },
-
-    editEmployee(id) {
-        toast.info('Fitur edit karyawan akan segera hadir');
     },
 
     async deleteEmployee(id) {
