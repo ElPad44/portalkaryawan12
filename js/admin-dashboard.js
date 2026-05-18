@@ -1,12 +1,14 @@
 /**
  * Portal Karyawan - Admin Dashboard
- * Admin dashboard with employee statistics
+ * Admin dashboard with employee statistics (Real-Time Synchronized)
  */
 
 const adminDashboard = {
     employees: [],
     attendance: [],
     leaves: [],
+    izin: [],
+    refreshInterval: null, // Properti baru untuk menyimpan tracker realtime interval
 
     async init() {
         if (!auth.isAdmin()) {
@@ -15,10 +17,17 @@ const adminDashboard = {
             return;
         }
 
+        // Hentikan interval lama jika ada (mencegah memory leak saat pindah halaman)
+        this.stopPolling();
+
+        // Muat data untuk pertama kali saat halaman dibuka
         await this.loadData();
         this.updateStats();
         this.renderRecentActivity();
         this.renderOnlineUsers();
+
+        // Aktifkan fitur REAL-TIME (Sinkronisasi otomatis berkala)
+        this.startPolling();
     },
 
     async loadData() {
@@ -39,6 +48,33 @@ const adminDashboard = {
             this.attendance = storage.get('attendance', []);
             this.leaves = storage.get('leaves', []);
             this.izin = storage.get('izin', []);
+        }
+    },
+
+    // ==========================================
+    // LOGIKA PENGATURAN REAL-TIME POLLING
+    // ==========================================
+    startPolling() {
+        // Mengatur auto-refresh setiap 30 detik (30000 ms)
+        // Batasan 30 detik ini sangat aman untuk kuota harian Google Apps Script Anda
+        this.refreshInterval = setInterval(async () => {
+            console.log('Menyinkronkan dashboard dengan Google Sheets...');
+            
+            // Tarik data terbaru dari server
+            await this.loadData();
+            
+            // Perbarui tampilan angka statistik & daftar online secara instan
+            this.updateStats();
+            this.renderOnlineUsers();
+            
+        }, 30000); 
+    },
+
+    stopPolling() {
+        // Fungsi pembersih untuk menghentikan loop pengecekan data
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
         }
     },
 
@@ -88,13 +124,19 @@ const adminDashboard = {
         Object.entries(els).forEach(([id, value]) => {
             const el = document.getElementById(id);
             if (el) {
-                // Animate number
+                // Animate number (Angka akan otomatis bergulir naik/turun dengan mulus jika ada perubahan data)
                 this.animateNumber(el, parseInt(el.textContent) || 0, value);
             }
         });
     },
 
     animateNumber(element, start, end) {
+        // Jika angka tidak berubah, jangan jalankan ulang animasi agar performa stabil
+        if (start === end) {
+            element.textContent = end;
+            return;
+        }
+
         const duration = 1000;
         const startTime = performance.now();
 
@@ -120,6 +162,7 @@ const adminDashboard = {
         const container = document.getElementById('admin-recent-activity');
         if (!container) return;
 
+        // Untuk aktivitas terbaru saat ini menggunakan mock-up data bawaan Anda
         const activities = [
             { user: 'Ahmad Rizky', action: 'Clock In', time: '5 menit yang lalu', avatar: 'https://ui-avatars.com/api/?name=Ahmad&background=3B82F6&color=fff' },
             { user: 'Budi Santoso', action: 'Mengajukan Cuti', time: '15 menit yang lalu', avatar: 'https://ui-avatars.com/api/?name=Budi&background=10B981&color=fff' },
@@ -145,6 +188,7 @@ const adminDashboard = {
         const container = document.getElementById('admin-online-users');
         if (!container) return;
 
+        // Menyaring karyawan dengan status aktif dari data database riil Anda
         const onlineUsers = this.employees.filter(e => e.status === 'active').slice(0, 5);
         const onlineCount = onlineUsers.length;
 
@@ -165,10 +209,7 @@ const adminDashboard = {
         `).join('');
     },
 
-    // Charts initialization (placeholder - would use Chart.js in production)
     initCharts() {
-        // This would be where Chart.js or similar library is initialized
-        // For now, we'll just show placeholders
         const attendanceChart = document.getElementById('admin-attendance-chart');
         const deptChart = document.getElementById('admin-dept-chart');
 
