@@ -311,7 +311,9 @@ const izin = {
         return labels[status] || status;
     },
 
-    // Admin functions
+    // ==========================================
+    // DI SINI LOGIKA REAL-TIME INTER-MODULE SYNC
+    // ==========================================
     async approveIzin(id) {
         if (!auth.isAdmin()) return;
 
@@ -319,11 +321,19 @@ const izin = {
             await api.approveIzin(id);
             const izin = this.izinData.find(i => i.id === id);
             if (izin) { izin.status = 'approved'; }
+            
             this.renderIzinList();
             this.updateStats();
             toast.success('Pengajuan izin disetujui');
+
+            // KRUSIAL: Jika modul admin dashboard aktif di memori browser, paksa update datanya saat ini juga
+            if (window.adminDashboard && typeof window.adminDashboard.loadData === 'function') {
+                await window.adminDashboard.loadData();
+                window.adminDashboard.updateStats();
+            }
         } catch (error) {
             console.error('Error approving izin:', error);
+            toast.error('Gagal memproses persetujuan izin');
         }
     },
 
@@ -334,11 +344,19 @@ const izin = {
             await api.rejectIzin(id);
             const izin = this.izinData.find(i => i.id === id);
             if (izin) { izin.status = 'rejected'; }
+            
             this.renderIzinList();
             this.updateStats();
             toast.info('Pengajuan izin ditolak');
+
+            // KRUSIAL: Jika modul admin dashboard aktif di memori browser, paksa update datanya saat ini juga
+            if (window.adminDashboard && typeof window.adminDashboard.loadData === 'function') {
+                await window.adminDashboard.loadData();
+                window.adminDashboard.updateStats();
+            }
         } catch (error) {
             console.error('Error rejecting izin:', error);
+            toast.error('Gagal memproses penolakan izin');
         }
     }
 };
