@@ -390,8 +390,13 @@ const adminEmployees = {
     // ==========================================
     // DI SINI ADALAH LOGIKA AKTIF FITUR EDIT DATA
     // ==========================================
+    // REWRITE: LOGIKA EDIT KARYAWAN (SALIN & TIMPA DI js/admin-employees.js)
+    // =========================================================================
+    editingEmployeeId: null,
+
     editEmployee(id) {
-        const emp = this.employees.find(e => e.id === id);
+        // PERBAIKAN SINKRONISASI ID: Menggunakan String() agar tipe angka/teks dari Sheets selalu cocok
+        const emp = this.employees.find(e => String(e.id) === String(id));
         if (!emp) {
             toast.error('Data karyawan tidak ditemukan!');
             return;
@@ -399,7 +404,7 @@ const adminEmployees = {
 
         this.editingEmployeeId = id;
 
-        // Auto-populate / Isi form modal secara otomatis dengan data lama
+        // Mengisi nilai input modal edit secara otomatis dengan data lama karyawan
         document.getElementById('edit-emp-name').value = emp.name || '';
         document.getElementById('edit-emp-email').value = emp.email || '';
         document.getElementById('edit-emp-department').value = emp.department || '';
@@ -408,7 +413,38 @@ const adminEmployees = {
         document.getElementById('edit-emp-status').value = emp.status || 'active';
         document.getElementById('edit-emp-join-date').value = emp.joinDate || '';
 
+        // Tampilkan modal edit
         this.showEditModal();
+        
+        // Aktifkan event listener tombol Batal, Close (X), dan Submit Form
+        this.initEditModalEvents();
+    },
+
+    showEditModal() {
+        const modal = document.getElementById('modal-edit-employee');
+        if (modal) {
+            modal.style.display = 'flex'; // Menggunakan 'flex' agar rata tengah sesuai modal-overlay portal Anda
+        }
+    },
+
+    hideEditModal() {
+        const modal = document.getElementById('modal-edit-employee');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    },
+
+    initEditModalEvents() {
+        const btnClose = document.getElementById('btn-close-edit-modal');
+        const btnCancel = document.getElementById('btn-cancel-edit');
+        const formEdit = document.getElementById('form-edit-employee');
+
+        if (btnClose) btnClose.onclick = () => this.hideEditModal();
+        if (btnCancel) btnCancel.onclick = () => this.hideEditModal();
+        
+        if (formEdit) {
+            formEdit.onsubmit = (e) => this.handleEditEmployee(e);
+        }
     },
 
     async handleEditEmployee(e) {
@@ -428,22 +464,31 @@ const adminEmployees = {
         };
 
         try {
-            // Panggil API update ke Google Apps Script backend
-            const result = await api.updateEmployee(this.editingEmployeeId, updatedData);
+            let result;
+            // Deteksi otomatis jika fungsi api.updateEmployee siap pakai, jika belum gunakan modul request dasar
+            if (typeof api.updateEmployee === 'function') {
+                result = await api.updateEmployee(this.editingEmployeeId, updatedData);
+            } else {
+                result = await api.request('updateEmployee', { id: this.editingEmployeeId, ...updatedData });
+            }
             
-            if (result.success) {
-                // Perbarui memori array lokal data aplikasi
-                const index = this.employees.findIndex(e => e.id === this.editingEmployeeId);
+            if (result && result.success) {
+                // Perbarui memori array lokal data aplikasi menggunakan String ID matching
+                const index = this.employees.findIndex(e => String(e.id) === String(this.editingEmployeeId));
                 if (index !== -1) {
                     this.employees[index] = { ...this.employees[index], ...updatedData };
                 }
 
-                this.updateDeptFilterOptions(department);
+                if (typeof this.updateDeptFilterOptions === 'function') {
+                    this.updateDeptFilterOptions(department);
+                }
+                
+                // Tutup modal dan refresh tampilan tabel di halaman admin
                 this.hideEditModal();
                 this.renderTable();
                 this.renderMobileCards();
                 
-                toast.success(`Data ${name} berhasil diperbarui di Spreadsheet!`);
+                toast.success(`Data ${name} berhasil diperbarui!`);
             } else {
                 toast.error(result.error || 'Gagal memperbarui data karyawan');
             }
