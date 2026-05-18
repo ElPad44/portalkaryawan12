@@ -251,7 +251,9 @@ const cuti = {
         return labels[status] || status;
     },
 
-    // Admin functions
+    // ==========================================
+    // DI SINI LOGIKA REAL-TIME INTER-MODULE SYNC
+    // ==========================================
     async approveLeave(id) {
         if (!auth.isAdmin()) {
             toast.error('Anda tidak memiliki akses!');
@@ -265,8 +267,15 @@ const cuti = {
             this.renderLeaveList();
             this.updateStats();
             toast.success('Pengajuan cuti disetujui!');
+
+            // KRUSIAL: Jika modul admin dashboard aktif di memori browser, paksa update datanya saat ini juga
+            if (window.adminDashboard && typeof window.adminDashboard.loadData === 'function') {
+                await window.adminDashboard.loadData();
+                window.adminDashboard.updateStats();
+            }
         } catch (error) {
             console.error('Error approving leave:', error);
+            toast.error('Gagal memproses persetujuan cuti');
         }
     },
 
@@ -292,8 +301,15 @@ const cuti = {
             this.renderLeaveList();
             this.updateStats();
             toast.info('Pengajuan cuti ditolak!');
+
+            // KRUSIAL: Jika modul admin dashboard aktif di memori browser, paksa update datanya saat ini juga
+            if (window.adminDashboard && typeof window.adminDashboard.loadData === 'function') {
+                await window.adminDashboard.loadData();
+                window.adminDashboard.updateStats();
+            }
         } catch (error) {
             console.error('Error rejecting leave:', error);
+            toast.error('Gagal memproses penolakan cuti');
         }
     }
 };
